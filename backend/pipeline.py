@@ -33,6 +33,17 @@ _jobs: dict[str, IntelligenceJob] = {}
 
 DEFAULT_DEVICES = [Device.DESKTOP.value, Device.TABLET.value, Device.MOBILE.value]
 
+# A job can fire up to len(flows) * len(devices) (~15) concurrent
+# capture_device() + vision_evaluate() pairs via the nested asyncio.gather
+# calls below. That's fine on a dev machine with plenty of sockets/file
+# descriptors, but on Railway's smaller container it was exhausting
+# resources mid-run and surfacing as OpenAI APIConnectionError ("Connection
+# error.") on most flow/device pairs at once. Capping concurrency keeps the
+# exact same screenshot + vision logic/output — it only changes how many
+# run at the same instant — so this doesn't deviate from local behavior,
+# it just keeps Railway from falling over under full parallelism.
+_DEVICE_CONCURRENCY = asyncio.Semaphore(4)
+
 
 def create_job(input_text: str) -> IntelligenceJob:
     job_id = str(uuid.uuid4())
@@ -144,19 +155,20 @@ async def _run_device(job_id: str, flow: UserFlow, device: str) -> None:
     flow_eval.devices[device] = dev_eval
 
     try:
-        url = flow.main_page.url or job.base_url
-        print(f"[{job_id[:8]}] [{flow.id}] [{device}] Capturing {url}")
-        img = await capture_device(url, device)
-        dev_eval.screenshot_path = save_screenshot(img, f"{job_id}_{flow.main_page.key}_{device}_raw.jpg")
+        async with _DEVICE_CONCURRENCY:
+            url = flow.main_page.url or job.base_url
+            print(f"[{job_id[:8]}] [{flow.id}] [{device}] Capturing {url}")
+            img = await capture_device(url, device)
+            dev_eval.screenshot_path = save_screenshot(img, f"{job_id}_{flow.main_page.key}_{device}_raw.jpg")
 
-        print(f"[{job_id[:8]}] [{flow.id}] [{device}] Vision heuristic evaluation...")
-        result = await vision_evaluate(img, device)
-        dev_eval.overall_score = result["overall_score"]
-        dev_eval.category_scores = result["category_scores"]
-        dev_eval.findings = result["findings"]
-        dev_eval.visual_quality = result.get("visual_quality")
-        dev_eval.status = StepStatus.COMPLETED
-        print(f"[{job_id[:8]}] [{flow.id}] [{device}] Done — score {dev_eval.overall_score}")
+            print(f"[{job_id[:8]}] [{flow.id}] [{device}] Vision heuristic evaluation...")
+            result = await vision_evaluate(img, device)
+            dev_eval.overall_score = result["overall_score"]
+            dev_eval.category_scores = result["category_scores"]
+            dev_eval.findings = result["findings"]
+            dev_eval.visual_quality = result.get("visual_quality")
+            dev_eval.status = StepStatus.COMPLETED
+            print(f"[{job_id[:8]}] [{flow.id}] [{device}] Done — score {dev_eval.overall_score}")
 
     except Exception as exc:
         dev_eval.status = StepStatus.FAILED

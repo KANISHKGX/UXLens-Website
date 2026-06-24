@@ -86,7 +86,11 @@ Rules:
 
 async def evaluate(image_bytes: bytes, device: str) -> dict:
     """Run GPT-4o Vision heuristic evaluation. Returns a dict matching DeviceEvaluation fields."""
-    client = AsyncOpenAI(api_key=settings.openai_api_key)
+    # Explicit timeout + retries: under Railway's tighter network conditions a
+    # connection attempt can transiently fail (surfaces as APIConnectionError,
+    # "Connection error."); retrying a couple of times before giving up avoids
+    # turning a one-off network blip into a failed evaluation.
+    client = AsyncOpenAI(api_key=settings.openai_api_key, timeout=60.0, max_retries=3)
     encoded = _encode_image(image_bytes)
 
     response = await client.chat.completions.create(
