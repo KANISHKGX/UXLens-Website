@@ -451,6 +451,18 @@ export default function HeuristicEvaluation({ initialView = 'observation' }) {
                       </div>
                     )}
                   </>
+                ) : job && deviceReady ? (
+                  // Real evaluation came back but the screenshot capture failed on the
+                  // backend (e.g. screenshot service down/blocked) — say so plainly
+                  // instead of silently showing the unrelated US Bank demo mock, which
+                  // reads as a wrong/mixed-up result for whatever site was analyzed.
+                  <div className="he-screenshot-unavailable">
+                    <p>Screenshot unavailable for this page/device.</p>
+                    <p className="he-screenshot-unavailable-sub">
+                      The evaluation text below is real, but the capture service couldn't
+                      render this page. Try again or pick another device.
+                    </p>
+                  </div>
                 ) : (
                   <MockBankPage pins={mockPins} />
                 )}

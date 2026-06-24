@@ -384,6 +384,15 @@ ol, ul { margin: 0; padding: 0; }
   border: 1px solid var(--line); border-radius: 10px; overflow: hidden;
   box-shadow: var(--shadow); margin-bottom: 16px; background: #fff;
 }
+
+/* Shown instead of the US Bank demo mock when a real evaluation finished but
+   the backend's screenshot capture failed for this page/device — makes the
+   failure obvious instead of silently displaying unrelated placeholder UI. */
+.he-screenshot-unavailable {
+  padding: 60px 24px; text-align: center; color: var(--muted);
+}
+.he-screenshot-unavailable p { margin: 0 0 8px; font-size: 14px; }
+.he-screenshot-unavailable-sub { font-size: 12.5px; max-width: 420px; margin: 0 auto; }
 /* The real captured screenshot has no fixed size of its own (up to 1280px
    wide), so without this it rendered at native resolution inside the
    narrower overflow:hidden container above — cropping to the top-left
