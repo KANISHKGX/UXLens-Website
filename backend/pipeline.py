@@ -173,4 +173,6 @@ async def _run_device(job_id: str, flow: UserFlow, device: str) -> None:
     except Exception as exc:
         dev_eval.status = StepStatus.FAILED
         dev_eval.error = str(exc)
-        print(f"[{job_id[:8]}] [{flow.id}] [{device}] FAILED: {exc}")
+        cause = getattr(exc, "__cause__", None)
+        cause_info = f" | cause: {type(cause).__name__}: {cause}" if cause else ""
+        print(f"[{job_id[:8]}] [{flow.id}] [{device}] FAILED: {type(exc).__name__}: {exc}{cause_info}")
