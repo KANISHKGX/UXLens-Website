@@ -1,7 +1,17 @@
 """
 Multi-device screenshot capture service.
-Primary:  Selenium  (uses system Chrome — no extra downloads)
-Fallback: Playwright -> thum.io
+Primary:   Selenium  (uses system Chrome — no extra downloads)
+Secondary: Playwright (bundled Chromium, via the Docker image's playwright/python base)
+
+thum.io is intentionally NOT used as a silent fallback here. It's an
+unauthenticated third-party screenshot API with no guarantee the image it
+returns actually corresponds to the URL requested (its free tier has been
+observed serving stale/cached/mismatched screenshots from its shared render
+pool) — accepting it as a stand-in produced reports where e.g. an "amazon"
+job displayed US Bank's homepage. Production must behave like local dev:
+either a real browser (Selenium/Playwright) captures the actual page, or the
+capture is reported as failed and the UI shows "Screenshot unavailable"
+rather than quietly substituting unrelated content.
 
 Unlike ../backend's single-viewport capture, this supports desktop/tablet/mobile
 viewports so the heuristic evaluation can run per device (spec step 4).
@@ -150,7 +160,7 @@ async def capture_device(url: str, device: str) -> bytes:
     width, height = DEVICE_VIEWPORTS.get(device, DEVICE_VIEWPORTS["desktop"])
     mobile = device == "mobile"
 
-    e1 = e2 = e3 = None
+    e1 = e2 = None
     try:
         data = await _capture_with_selenium(url, width, height, mobile)
         print(f"[screenshot] Selenium OK  {url} ({device})")
@@ -167,18 +177,13 @@ async def capture_device(url: str, device: str) -> bytes:
         e2 = err
         print(f"[screenshot] Playwright failed ({device}): {err}")
 
-    try:
-        data = await _capture_with_thumio(url, width)
-        print(f"[screenshot] thum.io OK  {url} ({device})")
-        return data
-    except Exception as err:
-        e3 = err
-
+    # No thum.io fallback — see module docstring. A failed real-browser
+    # capture must surface as a failure, not get silently replaced with an
+    # unverified third-party image that might depict a different site.
     raise RuntimeError(
         f"All screenshot methods failed for {url} ({device}).\n"
         f"  Selenium:   {e1}\n"
-        f"  Playwright: {e2}\n"
-        f"  thum.io:    {e3}"
+        f"  Playwright: {e2}"
     )
 
 
